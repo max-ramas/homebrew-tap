@@ -133,29 +133,7 @@ jobs:
                  "then re-run this workflow."
             exit 1
           fi
-          # matches both the pristine placeholder and any previously-filled URL,
-          # so this is safe to run over and over as new versions ship
-          python3 - "$F" <<'PY'
-import re, sys, os
-path = sys.argv[1]
-text = open(path).read()
-version = os.environ["VERSION"]
-text = re.sub(r'version "[^"]*"(\s*# auto-updated[^\n]*)', f'version "{version}"\\1', text)
-def replace_block(text, os_marker, arch_marker, url, sha):
-    # Non-greedy search forward from os_marker to the *nearest* arch_marker
-    # after it — correctly disambiguates on_linux/on_arm from the earlier
-    # on_macos/on_arm block, since the search only looks forward.
-    pattern = re.compile(
-        rf'({os_marker}.*?{arch_marker}.*?url ")[^"]*(".*?sha256 ")[^"]*(")',
-        re.DOTALL,
-    )
-    return pattern.sub(lambda m: m.group(1) + url + m.group(2) + sha + m.group(3), text, count=1)
-text = replace_block(text, r'on_macos do', r'on_arm do', os.environ["DARWIN_URL"], os.environ["DARWIN_SHA"])
-text = replace_block(text, r'on_linux do', r'on_intel do', os.environ["LINUX_X86_64_URL"], os.environ["LINUX_X86_64_SHA"])
-text = replace_block(text, r'on_linux do', r'on_arm do', os.environ["LINUX_ARM64_URL"], os.environ["LINUX_ARM64_SHA"])
-open(path, "w").write(text)
-PY
-          cat "$F"
+          python3 .github/scripts/patch_formula.py "$F"
 
       - name: Commit and push
         env:
