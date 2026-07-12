@@ -46,8 +46,8 @@ Only needed for first-time setup of a new formula or debugging a failed run:
 
 ```bash
 gh workflow run update-formula.yml --repo max-ramas/homebrew-tap \
-  -f repo=max-ramas/rms-memory \
-  -f formula=rms-memory \
+  -f repo=max-ramas/rms-memory-mcp \
+  -f formula=rms-memory-mcp \
   -f bin_name=rms-memory \
   -f tag=v1.0.2
 ```
