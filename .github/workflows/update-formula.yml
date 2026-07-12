@@ -1,0 +1,206 @@
+name: Update formula
+
+# Normal operation: fully automatic. A product repo's own release workflow
+# fires a repository_dispatch at the end of `release.yml` (snippet at the
+# bottom of this file). Nothing to run by hand, ever, once that's wired up.
+#
+# workflow_dispatch below exists ONLY for: (a) wiring up a brand-new
+# product for the first time, (b) backfilling/debugging a run that failed.
+
+on:
+  repository_dispatch:
+    types: [new-release]
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Source repo, e.g. max-ramas/rms-memory-mcp"
+        required: true
+      formula:
+        description: "Formula filename without .rb, e.g. rms-memory-mcp"
+        required: true
+      bin_name:
+        description: "Installed binary name, e.g. rms-memory-mcp"
+        required: true
+      tag:
+        description: "Release tag, e.g. v1.0.3 (empty = latest)"
+        required: false
+
+jobs:
+  update-formula:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve inputs
+        id: in
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_REPO: ${{ github.event.client_payload.repo }}
+          DISPATCH_FORMULA: ${{ github.event.client_payload.formula }}
+          DISPATCH_BIN: ${{ github.event.client_payload.bin_name }}
+          DISPATCH_TAG: ${{ github.event.client_payload.tag }}
+          MANUAL_REPO: ${{ github.event.inputs.repo }}
+          MANUAL_FORMULA: ${{ github.event.inputs.formula }}
+          MANUAL_BIN: ${{ github.event.inputs.bin_name }}
+          MANUAL_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          REPO="${DISPATCH_REPO:-${MANUAL_REPO:-}}"
+          FORMULA="${DISPATCH_FORMULA:-${MANUAL_FORMULA:-}}"
+          BIN="${DISPATCH_BIN:-${MANUAL_BIN:-}}"
+          TAG="${DISPATCH_TAG:-${MANUAL_TAG:-}}"
+
+          if [ -z "$REPO" ] || [ -z "$FORMULA" ] || [ -z "$BIN" ]; then
+            echo "::error::repo, formula, and bin_name are all required."
+            exit 1
+          fi
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release view --repo "$REPO" --json tagName -q .tagName)
+          fi
+
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+          echo "formula=$FORMULA" >> "$GITHUB_OUTPUT"
+          echo "bin=$BIN" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Find real assets (no filename guessing)
+        id: assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ steps.in.outputs.repo }}
+          TAG: ${{ steps.in.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$REPO" --json assets -q '.assets[].name' > assets.txt
+          echo "---- assets in $REPO@$TAG ----"; cat assets.txt
+
+          DARWIN_ARM64=$(grep -iE 'darwin|macos' assets.txt | grep -iE 'arm64|aarch64' | grep -iE '\.(tar\.gz|tgz|zip)$' || true)
+          LINUX_X86_64=$(grep -iE 'linux' assets.txt | grep -iE 'x86_64|amd64' | grep -iE '\.(tar\.gz|tgz)$' || true)
+          LINUX_ARM64=$(grep -iE 'linux' assets.txt | grep -iE 'arm64|aarch64' | grep -iE '\.(tar\.gz|tgz)$' || true)
+
+          for pair in "darwin_arm64:$DARWIN_ARM64" "linux_x86_64:$LINUX_X86_64" "linux_arm64:$LINUX_ARM64"; do
+            key="${pair%%:*}"; val="${pair#*:}"
+            if [ -z "$val" ] || [ "$(echo "$val" | wc -l)" -ne 1 ]; then
+              echo "::error::Could not uniquely identify the $key asset for $REPO@$TAG. Candidates:"
+              echo "$val"
+              echo "All assets:"; cat assets.txt
+              exit 1
+            fi
+          done
+
+          echo "darwin_arm64_name=$DARWIN_ARM64" >> "$GITHUB_OUTPUT"
+          echo "linux_x86_64_name=$LINUX_X86_64" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64_name=$LINUX_ARM64" >> "$GITHUB_OUTPUT"
+
+      - name: Download and hash
+        id: sha
+        env:
+          REPO: ${{ steps.in.outputs.repo }}
+          TAG: ${{ steps.in.outputs.tag }}
+          DARWIN_NAME: ${{ steps.assets.outputs.darwin_arm64_name }}
+          LINUX_X86_64_NAME: ${{ steps.assets.outputs.linux_x86_64_name }}
+          LINUX_ARM64_NAME: ${{ steps.assets.outputs.linux_arm64_name }}
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/$REPO/releases/download/$TAG"
+          curl -fsSL -o darwin.tar.gz "$BASE/$DARWIN_NAME"
+          curl -fsSL -o linux-x86_64.tar.gz "$BASE/$LINUX_X86_64_NAME"
+          curl -fsSL -o linux-arm64.tar.gz "$BASE/$LINUX_ARM64_NAME"
+          echo "darwin_url=$BASE/$DARWIN_NAME" >> "$GITHUB_OUTPUT"
+          echo "linux_x86_64_url=$BASE/$LINUX_X86_64_NAME" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64_url=$BASE/$LINUX_ARM64_NAME" >> "$GITHUB_OUTPUT"
+          echo "darwin_sha256=$(sha256sum darwin.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "linux_x86_64_sha256=$(sha256sum linux-x86_64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64_sha256=$(sha256sum linux-arm64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Patch formula
+        env:
+          FORMULA: ${{ steps.in.outputs.formula }}
+          VERSION: ${{ steps.in.outputs.version }}
+          DARWIN_URL: ${{ steps.sha.outputs.darwin_url }}
+          DARWIN_SHA: ${{ steps.sha.outputs.darwin_sha256 }}
+          LINUX_X86_64_URL: ${{ steps.sha.outputs.linux_x86_64_url }}
+          LINUX_X86_64_SHA: ${{ steps.sha.outputs.linux_x86_64_sha256 }}
+          LINUX_ARM64_URL: ${{ steps.sha.outputs.linux_arm64_url }}
+          LINUX_ARM64_SHA: ${{ steps.sha.outputs.linux_arm64_sha256 }}
+        run: |
+          set -euo pipefail
+          F="Formula/${FORMULA}.rb"
+          if [ ! -f "$F" ]; then
+            echo "::error::$F does not exist yet. Scaffold it once by hand" \
+                 "(copy Formula/rms-memory-mcp.rb as a template), commit it," \
+                 "then re-run this workflow."
+            exit 1
+          fi
+          # matches both the pristine placeholder and any previously-filled URL,
+          # so this is safe to run over and over as new versions ship
+          python3 - "$F" <<'PY'
+import re, sys, os
+path = sys.argv[1]
+text = open(path).read()
+version = os.environ["VERSION"]
+text = re.sub(r'version "[^"]*"(\s*# auto-updated[^\n]*)', f'version "{version}"\\1', text)
+def replace_block(text, os_marker, arch_marker, url, sha):
+    # Non-greedy search forward from os_marker to the *nearest* arch_marker
+    # after it — correctly disambiguates on_linux/on_arm from the earlier
+    # on_macos/on_arm block, since the search only looks forward.
+    pattern = re.compile(
+        rf'({os_marker}.*?{arch_marker}.*?url ")[^"]*(".*?sha256 ")[^"]*(")',
+        re.DOTALL,
+    )
+    return pattern.sub(lambda m: m.group(1) + url + m.group(2) + sha + m.group(3), text, count=1)
+text = replace_block(text, r'on_macos do', r'on_arm do', os.environ["DARWIN_URL"], os.environ["DARWIN_SHA"])
+text = replace_block(text, r'on_linux do', r'on_intel do', os.environ["LINUX_X86_64_URL"], os.environ["LINUX_X86_64_SHA"])
+text = replace_block(text, r'on_linux do', r'on_arm do', os.environ["LINUX_ARM64_URL"], os.environ["LINUX_ARM64_SHA"])
+open(path, "w").write(text)
+PY
+          cat "$F"
+
+      - name: Commit and push
+        env:
+          FORMULA: ${{ steps.in.outputs.formula }}
+          VERSION: ${{ steps.in.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "Formula/${FORMULA}.rb"
+          if git diff --cached --quiet; then
+            echo "No changes — already up to date."
+            exit 0
+          fi
+          git commit -m "${FORMULA} ${VERSION}"
+          git push
+
+# ---------------------------------------------------------------------------
+# ONE-TIME per product repo, add to the end of its release.yml:
+#
+#   - name: Notify homebrew tap
+#     if: startsWith(github.ref, 'refs/tags/')
+#     env:
+#       GH_TOKEN: ${{ secrets.TAP_DISPATCH_TOKEN }}
+#     run: |
+#       gh api repos/max-ramas/homebrew-tap/dispatches \
+#         -f event_type=new-release \
+#         -f "client_payload[repo]=max-ramas/rms-memory-mcp" \
+#         -f "client_payload[formula]=rms-memory-mcp" \
+#         -f "client_payload[bin_name]=rms-memory" \
+#         -f "client_payload[tag]=${{ github.ref_name }}"
+#
+# NOTE on bin_name: confirmed the compiled binary is "rms-memory", not
+# "rms-memory-mcp" — the crates.io package name and the binary name differ.
+# bin_name is currently carried through for documentation/future use only;
+# the actual installed binary name lives hardcoded in each formula's own
+# `install`/`test` blocks (Formula/rms-memory-mcp.rb uses "rms-memory").
+# If you template formula generation later, wire bin_name in there.
+#
+# TAP_DISPATCH_TOKEN = a classic PAT with `repo` scope, added as a secret
+# in the *product* repo (not this tap repo). Same token can be reused
+# across all product repos — create it once.
+#
+# Adding a NEW product to the tap later: copy Formula/rms-memory-mcp.rb as
+# a template, adjust desc/homepage/binary-name/platform matrix, commit it
+# once — then the dispatch snippet above (with that product's params)
+# keeps it updated forever with zero further manual steps.
+# ---------------------------------------------------------------------------
