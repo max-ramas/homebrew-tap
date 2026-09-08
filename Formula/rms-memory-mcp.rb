@@ -7,7 +7,7 @@ class RmsMemoryMcp < Formula
   on_macos do
     on_arm do
       url "https://github.com/max-ramas/rms-memory-mcp/releases/download/v1.1.1/rms_memory_mcp_1.1.1_aarch64-apple-darwin.tar.gz"
-      sha256 "8579397b776400a08ede64926fb91b84d42d2e74bf5d73199f3b63eb3b336f4f"
+      sha256 "d60dc02df0147243cbe6b172e2a047c9e61bd6674fd0c3201642654634565b14"
     end
     on_intel do
       odie "rms-memory-mcp dropped macOS Intel (x86_64) builds as of v1.0.1. " \
@@ -18,11 +18,11 @@ class RmsMemoryMcp < Formula
   on_linux do
     on_intel do
       url "https://github.com/max-ramas/rms-memory-mcp/releases/download/v1.1.1/rms_memory_mcp_1.1.1_x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "f7e713155a18a4bfb54ef0f9f38be8a428f2462787f3547845232fb7e356f856"
+      sha256 "78f5e3669757a764064ca29d8f76660e7c396f0f4186623ec2db94b9566afcf9"
     end
     on_arm do
       url "https://github.com/max-ramas/rms-memory-mcp/releases/download/v1.1.1/rms_memory_mcp_1.1.1_aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "4c41472b465256d3871ebf3128479ba706792fe773c7de7bde3ee015a98c2497"
+      sha256 "f913263d53638f2fec6238194804c6af44f88834ba6ae90ea203add0b13822b3"
     end
   end
 
