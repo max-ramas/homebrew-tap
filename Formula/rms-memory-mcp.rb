@@ -1,13 +1,13 @@
 class RmsMemoryMcp < Formula
   desc "Persistent local-first memory MCP server for AI coding agents"
   homepage "https://github.com/max-ramas/rms-memory-mcp"
-  version "1.1.1" # auto-updated by update-formula.yml — do not hand-edit
+  version "1.1.2" # auto-updated by update-formula.yml — do not hand-edit
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/max-ramas/rms-memory-mcp/releases/download/v1.1.1/rms_memory_mcp_1.1.1_aarch64-apple-darwin.tar.gz"
-      sha256 "d60dc02df0147243cbe6b172e2a047c9e61bd6674fd0c3201642654634565b14"
+      url "https://github.com/max-ramas/rms-memory-mcp/releases/download/v1.1.2/rms_memory_mcp_1.1.2_aarch64-apple-darwin.tar.gz"
+      sha256 "2c4db1bd5969a0a14bad234a838c7476d1d416e8cba0d65e6a0a7ab04de9b974"
     end
     on_intel do
       odie "rms-memory-mcp dropped macOS Intel (x86_64) builds as of v1.0.1. " \
@@ -17,12 +17,12 @@ class RmsMemoryMcp < Formula
 
   on_linux do
     on_intel do
-      url "https://github.com/max-ramas/rms-memory-mcp/releases/download/v1.1.1/rms_memory_mcp_1.1.1_x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "78f5e3669757a764064ca29d8f76660e7c396f0f4186623ec2db94b9566afcf9"
+      url "https://github.com/max-ramas/rms-memory-mcp/releases/download/v1.1.2/rms_memory_mcp_1.1.2_x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "43d355e4cb5682a89f260f0f3348da38aad5b4d171accb30ee66af684ef73202"
     end
     on_arm do
-      url "https://github.com/max-ramas/rms-memory-mcp/releases/download/v1.1.1/rms_memory_mcp_1.1.1_aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "f913263d53638f2fec6238194804c6af44f88834ba6ae90ea203add0b13822b3"
+      url "https://github.com/max-ramas/rms-memory-mcp/releases/download/v1.1.2/rms_memory_mcp_1.1.2_aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "3ac174c278b4fbcdfd207b94be2c6befede0639414a470c7d9cff39b056a90cc"
     end
   end
 
